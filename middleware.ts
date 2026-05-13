@@ -6,6 +6,7 @@ const API_PUBLIC_PATHS = ["/api/auth"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isApiPath = pathname.startsWith("/api/");
 
   // Public API paths (register, login, logout) bypass auth
   if (API_PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
@@ -47,6 +48,13 @@ export async function middleware(request: NextRequest) {
 
   // Redirect unauthenticated users to login
   if (!user) {
+    if (isApiPath) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
@@ -62,12 +70,26 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/educator") &&
     !["ADMIN", "EDUCATOR"].includes(role)
   ) {
+    if (isApiPath) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
   if (
     pathname.startsWith("/student") &&
     !["ADMIN", "STUDENT"].includes(role)
   ) {
+    if (isApiPath) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
 

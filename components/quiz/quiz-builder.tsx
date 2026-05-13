@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { quizGenerationSchema, type QuizGenerationInput } from "@/lib/validations";
+import { z } from "zod";
+import { quizGenerationSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles, BookOpen } from "lucide-react";
+import { Check, Loader2, Sparkles, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { QuestionType } from "@prisma/client";
@@ -32,6 +33,13 @@ const QUESTION_TYPES = [
   { value: QuestionType.MATCHING, label: "Matching" },
 ];
 
+const quizBuilderFormSchema = quizGenerationSchema.omit({
+  pdfIds: true,
+  questionTypes: true,
+});
+
+type QuizBuilderFormInput = z.input<typeof quizBuilderFormSchema>;
+
 export function QuizBuilder({ pdfs }: QuizBuilderProps) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
@@ -45,8 +53,8 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<QuizGenerationInput>({
-    resolver: zodResolver(quizGenerationSchema),
+  } = useForm<QuizBuilderFormInput>({
+    resolver: zodResolver(quizBuilderFormSchema),
     defaultValues: {
       totalQuestions: 10,
       difficultyDistribution: { easy: 3, medium: 5, hard: 2 },
@@ -75,7 +83,7 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
     );
   }
 
-  async function onSubmit(data: QuizGenerationInput) {
+  async function onSubmit(data: QuizBuilderFormInput) {
     if (selectedPDFs.length === 0) {
       toast.error("Select at least one PDF");
       return;
@@ -116,7 +124,12 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
   const processedPDFs = pdfs.filter((p) => p.status === "PROCESSED");
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form
+      onSubmit={handleSubmit(onSubmit, () => {
+        toast.error("Please complete the required quiz fields");
+      })}
+      className="space-y-6"
+    >
       {/* Basic Info */}
       <Card>
         <CardHeader>
@@ -148,20 +161,35 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
             <p className="text-sm text-muted-foreground">No processed PDFs available. Upload and process PDFs first.</p>
           ) : (
             <div className="grid grid-cols-1 gap-2">
-              {processedPDFs.map((pdf) => (
-                <div
+              {processedPDFs.map((pdf) => {
+                const selected = selectedPDFs.includes(pdf.id);
+
+                return (
+                <button
+                  type="button"
                   key={pdf.id}
                   onClick={() => togglePDF(pdf.id)}
-                  className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
-                    selectedPDFs.includes(pdf.id)
+                  aria-pressed={selected}
+                  className={`flex w-full items-center gap-3 rounded-md border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    selected
                       ? "border-primary bg-primary/5"
                       : "hover:bg-muted"
                   }`}
                 >
-                  <div className={`h-4 w-4 rounded border-2 flex-shrink-0 ${selectedPDFs.includes(pdf.id) ? "bg-primary border-primary" : "border-muted-foreground"}`} />
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 ${
+                      selected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-muted-foreground"
+                    }`}
+                  >
+                    {selected ? <Check className="h-3.5 w-3.5" /> : null}
+                  </span>
                   <span className="text-sm font-medium">{pdf.title}</span>
-                </div>
-              ))}
+                </button>
+              );
+              })}
             </div>
           )}
         </CardContent>
@@ -229,7 +257,15 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Time Limit (minutes)</Label>
-              <Input type="number" {...register("timeLimit", { valueAsNumber: true })} placeholder="Leave empty for unlimited" className="mt-1" />
+              <Input
+                type="number"
+                {...register("timeLimit", {
+                  setValueAs: (value) =>
+                    value === "" ? undefined : Number(value),
+                })}
+                placeholder="Leave empty for unlimited"
+                className="mt-1"
+              />
             </div>
             <div>
               <Label>Passing Score (%)</Label>

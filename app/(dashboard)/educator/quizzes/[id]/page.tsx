@@ -3,9 +3,9 @@ import { redirect, notFound } from "next/navigation";
 import { quizRepository } from "@/repositories/quiz.repository";
 import { Header } from "@/components/dashboard/header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PublishQuizButton } from "@/components/quiz/publish-quiz-button";
 import { difficultyColor, difficultyLabel, questionTypeLabel, formatDate } from "@/lib/utils";
 import { CheckCircle2, Circle, Clock, Users } from "lucide-react";
 
@@ -49,9 +49,7 @@ export default async function QuizDetailPage({
         {/* Actions */}
         {quiz.status === "DRAFT" && (
           <div className="flex gap-3">
-            <form action={`/api/quizzes/${id}/publish`} method="POST">
-              <Button type="submit">Publish Quiz</Button>
-            </form>
+            <PublishQuizButton quizId={id} />
           </div>
         )}
 

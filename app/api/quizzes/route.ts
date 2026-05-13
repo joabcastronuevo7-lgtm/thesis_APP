@@ -55,7 +55,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await createAndGenerateQuiz(parsed.data, session.user.id);
+    const result = await createAndGenerateQuiz(
+      {
+        ...parsed.data,
+        timeLimit: parsed.data.timeLimit ?? undefined,
+      },
+      session.user.id
+    );
 
     return NextResponse.json(
       {
