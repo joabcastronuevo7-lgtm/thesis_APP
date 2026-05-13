@@ -1,0 +1,423 @@
+// ============================================================
+// ExamGen RAG - Prisma Schema
+// PostgreSQL database with full relational structure
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")       // Transaction Pooler (port 6543) — runtime
+  directUrl = env("DIRECT_URL")         // Direct connection (port 5432) — migrations
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  ADMIN
+  EDUCATOR
+  STUDENT
+}
+
+enum PDFStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  SCHEDULED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  FILL_IN_THE_BLANK
+  MATCHING
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  EXPIRED
+}
+
+// ============================================================
+// USER & AUTH
+// ============================================================
+
+model User {
+  id            String    @id  // set explicitly to the Supabase Auth UUID at registration
+  name          String
+  email         String    @unique
+  password      String?
+  role          Role      @default(STUDENT)
+  image         String?
+  emailVerified DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  // Relations
+  sessions      Session[]
+  accounts      Account[]
+  pdfs          PDF[]
+  quizzes       Quiz[]           @relation("EducatorQuizzes")
+  attempts      StudentAttempt[]
+  weakTopics    WeakTopic[]
+  auditLogs     AuditLog[]
+  assignedExams ExamAssignment[] @relation("StudentAssignments")
+  createdExams  ExamAssignment[] @relation("EducatorAssignments")
+
+  @@index([email])
+  @@index([role])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ============================================================
+// PDF & CONTENT
+// ============================================================
+
+model PDF {
+  id           String    @id @default(cuid())
+  title        String
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String    @default("application/pdf")
+  status       PDFStatus @default(PENDING)
+  pageCount    Int?
+  uploadedById String
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  uploadedBy User            @relation(fields: [uploadedById], references: [id])
+  chunks     ExtractedChunk[]
+  quizzes    QuizPDF[]
+
+  @@index([uploadedById])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("pdfs")
+}
+
+model ExtractedChunk {
+  id            String   @id @default(cuid())
+  pdfId         String
+  content       String   @db.Text
+  chunkIndex    Int
+  pageNumber    Int?
+  tokenCount    Int?
+  vectorId      String?  @unique // Pinecone vector ID
+  topics        String[] // extracted topic tags
+  keywords      String[]
+  embedding     Float[]  // stored locally as backup
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pdf       PDF        @relation(fields: [pdfId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([pdfId])
+  @@index([vectorId])
+  @@map("extracted_chunks")
+}
+
+// ============================================================
+// QUIZ & QUESTIONS
+// ============================================================
+
+model Quiz {
+  id               String     @id @default(cuid())
+  title            String
+  description      String?
+  status           QuizStatus @default(DRAFT)
+  educatorId       String
+  timeLimit        Int?       // minutes, null = unlimited
+  totalQuestions   Int        @default(0)
+  passingScore     Int        @default(60) // percentage
+  shuffleQuestions Boolean    @default(true)
+  shuffleChoices   Boolean    @default(true)
+  maxAttempts      Int        @default(1)
+  scheduledAt      DateTime?
+  expiresAt        DateTime?
+  settings         Json?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  educator    User             @relation("EducatorQuizzes", fields: [educatorId], references: [id])
+  questions   Question[]
+  pdfs        QuizPDF[]
+  attempts    StudentAttempt[]
+  assignments ExamAssignment[]
+
+  @@index([educatorId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("quizzes")
+}
+
+model QuizPDF {
+  quizId String
+  pdfId  String
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  pdf  PDF  @relation(fields: [pdfId], references: [id], onDelete: Cascade)
+
+  @@id([quizId, pdfId])
+  @@map("quiz_pdfs")
+}
+
+model Question {
+  id                String       @id @default(cuid())
+  quizId            String
+  chunkId           String?
+  type              QuestionType @default(MULTIPLE_CHOICE)
+  difficulty        Difficulty   @default(MEDIUM)
+  text              String       @db.Text
+  explanation       String?      @db.Text
+  topic             String?
+  keywords          String[]
+  points            Int          @default(1)
+  confidenceScore   Float?       // 0-1, RAG validation score
+  isAiGenerated     Boolean      @default(true)
+  sourceContext     String?      @db.Text // snippet from chunk used
+  order             Int          @default(0)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  quiz    Quiz            @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  chunk   ExtractedChunk? @relation(fields: [chunkId], references: [id])
+  choices Choice[]
+  answers StudentAnswer[]
+
+  @@index([quizId])
+  @@index([type])
+  @@index([difficulty])
+  @@map("questions")
+}
+
+model Choice {
+  id         String   @id @default(cuid())
+  questionId String
+  text       String
+  isCorrect  Boolean  @default(false)
+  matchKey   String?  // for matching type
+  matchValue String?  // for matching type
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  question      Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  studentAnswer StudentAnswer[]
+
+  @@index([questionId])
+  @@map("choices")
+}
+
+// ============================================================
+// EXAM ADMINISTRATION
+// ============================================================
+
+model ExamAssignment {
+  id         String    @id @default(cuid())
+  quizId     String
+  studentId  String
+  educatorId String
+  assignedAt DateTime  @default(now())
+  dueAt      DateTime?
+
+  quiz     Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student  User @relation("StudentAssignments", fields: [studentId], references: [id])
+  educator User @relation("EducatorAssignments", fields: [educatorId], references: [id])
+
+  @@unique([quizId, studentId])
+  @@index([quizId])
+  @@index([studentId])
+  @@map("exam_assignments")
+}
+
+model StudentAttempt {
+  id             String        @id @default(cuid())
+  quizId         String
+  studentId      String
+  status         AttemptStatus @default(IN_PROGRESS)
+  score          Float?
+  maxScore       Float?
+  percentage     Float?
+  startedAt      DateTime      @default(now())
+  submittedAt    DateTime?
+  timeTakenSecs  Int?
+  feedback       String?       @db.Text
+  attemptNumber  Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  quiz     Quiz            @relation(fields: [quizId], references: [id])
+  student  User            @relation(fields: [studentId], references: [id])
+  answers  StudentAnswer[]
+
+  @@index([quizId])
+  @@index([studentId])
+  @@index([status])
+  @@map("student_attempts")
+}
+
+model StudentAnswer {
+  id          String   @id @default(cuid())
+  attemptId   String
+  questionId  String
+  choiceId    String?
+  textAnswer  String?  @db.Text // for fill-in-the-blank
+  isCorrect   Boolean?
+  pointsEarned Float?
+  timeTakenSecs Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attempt  StudentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question       @relation(fields: [questionId], references: [id])
+  choice   Choice?        @relation(fields: [choiceId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("student_answers")
+}
+
+// ============================================================
+// ANALYTICS
+// ============================================================
+
+model Analytics {
+  id           String   @id @default(cuid())
+  quizId       String
+  totalTakers  Int      @default(0)
+  avgScore     Float    @default(0)
+  highScore    Float    @default(0)
+  lowScore     Float    @default(0)
+  passRate     Float    @default(0)
+  avgTimeSecs  Int      @default(0)
+  easyScore    Float    @default(0)
+  mediumScore  Float    @default(0)
+  hardScore    Float    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([quizId])
+  @@map("analytics")
+}
+
+model WeakTopic {
+  id          String   @id @default(cuid())
+  studentId   String
+  quizId      String?
+  topic       String
+  errorRate   Float    @default(0) // 0-1
+  attempts    Int      @default(0)
+  lastSeenAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, topic])
+  @@index([studentId])
+  @@index([topic])
+  @@map("weak_topics")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
