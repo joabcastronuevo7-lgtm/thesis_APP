@@ -5,6 +5,7 @@ import { Header } from "@/components/dashboard/header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DeleteQuizButton } from "@/components/quiz/delete-quiz-button";
 import { BookOpen, Plus, Clock, Users } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
@@ -80,6 +81,11 @@ export default async function EducatorQuizzesPage() {
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/educator/quizzes/${quiz.id}`}>Manage</Link>
                       </Button>
+                      <DeleteQuizButton
+                        quizId={quiz.id}
+                        quizTitle={quiz.title}
+                        size="sm"
+                      />
                     </div>
                   </div>
                 </CardContent>

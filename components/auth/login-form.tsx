@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { parseJsonResponse } from "@/lib/api-response";
 
 export function LoginForm() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export function LoginForm() {
         body: JSON.stringify(data),
       });
 
-      const result = await res.json();
+      const result = await parseJsonResponse<{ success: boolean; error?: string; user: { role: string } }>(res);
       if (!result.success) throw new Error(result.error);
 
       toast.success("Welcome back!");

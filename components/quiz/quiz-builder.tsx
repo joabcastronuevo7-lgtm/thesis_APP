@@ -15,6 +15,7 @@ import { Check, Loader2, Sparkles, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { QuestionType } from "@prisma/client";
+import { parseJsonResponse } from "@/lib/api-response";
 
 interface PDF {
   id: string;
@@ -109,7 +110,12 @@ export function QuizBuilder({ pdfs }: QuizBuilderProps) {
         }),
       });
 
-      const result = await response.json();
+      const result = await parseJsonResponse<{
+        success: boolean;
+        error?: string;
+        message: string;
+        data: { quizId: string };
+      }>(response);
       if (!result.success) throw new Error(result.error);
 
       toast.success(result.message);

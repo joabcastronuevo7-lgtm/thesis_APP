@@ -43,10 +43,10 @@ export default async function StudentDashboard() {
       <Header title="Student Dashboard" description={`Welcome, ${session.user.name}`} />
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard title="Assigned Exams" value={assignments} icon={ClipboardList} />
-          <StatsCard title="Completed" value={attempts.length} icon={CheckCircle} />
-          <StatsCard title="Average Score" value={`${avgScore}%`} icon={TrendingUp} />
-          <StatsCard title="Best Score" value={`${bestScore}%`} icon={Award} />
+          <StatsCard title="Assigned Exams" value={assignments} icon={ClipboardList} color="blue" />
+          <StatsCard title="Completed" value={attempts.length} icon={CheckCircle} color="green" />
+          <StatsCard title="Average Score" value={`${avgScore}%`} icon={TrendingUp} color="purple" />
+          <StatsCard title="Best Score" value={`${bestScore}%`} icon={Award} color="orange" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

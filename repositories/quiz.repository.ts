@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import type { QuizStatus, Difficulty, QuestionType } from "@prisma/client";
+import type { QuizStatus } from "@prisma/client";
 import type { GeneratedQuestion } from "@/types";
 
 export const quizRepository = {
@@ -84,9 +84,13 @@ export const quizRepository = {
   },
 
   async softDelete(id: string) {
-    return prisma.quiz.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    return prisma.$transaction(async (tx) => {
+      await tx.examAssignment.deleteMany({ where: { quizId: id } });
+
+      return tx.quiz.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     });
   },
 
@@ -102,8 +106,18 @@ export const quizRepository = {
     questions: GeneratedQuestion[],
     chunkIdMap: Record<string, string>
   ) {
+    const validChunkIds = new Set(
+      (
+        await prisma.extractedChunk.findMany({
+          where: { id: { in: Object.values(chunkIdMap) } },
+          select: { id: true },
+        })
+      ).map((chunk) => chunk.id)
+    );
+
     const questionRecords = await Promise.all(
       questions.map(async (q, index) => {
+        const chunkId = chunkIdMap[q.sourceContext?.trim().slice(0, 50) ?? ""];
         const question = await prisma.question.create({
           data: {
             quizId,
@@ -116,7 +130,7 @@ export const quizRepository = {
             sourceContext: q.sourceContext,
             confidenceScore: q.confidenceScore,
             order: index,
-            chunkId: chunkIdMap[q.sourceContext?.slice(0, 50) ?? ""] ?? null,
+            chunkId: chunkId && validChunkIds.has(chunkId) ? chunkId : null,
           },
         });
 
@@ -143,9 +157,19 @@ export const quizRepository = {
     return questionRecords;
   },
 
+  async replaceGeneratedQuestions(
+    quizId: string,
+    questions: GeneratedQuestion[],
+    chunkIdMap: Record<string, string>
+  ) {
+    await prisma.question.deleteMany({ where: { quizId } });
+    return this.saveGeneratedQuestions(quizId, questions, chunkIdMap);
+  },
+
   async getAssignedQuizzes(studentId: string) {
     return prisma.examAssignment.findMany({
-      where: { studentId },
+      where: { studentId, quiz: { deletedAt: null, status: "PUBLISHED" } },
+      orderBy: { assignedAt: "desc" },
       include: {
         quiz: {
           include: {
@@ -157,9 +181,14 @@ export const quizRepository = {
     });
   },
 
-  async assignToStudents(quizId: string, studentIds: string[], educatorId: string) {
+  async assignToStudents(
+    quizId: string,
+    studentIds: string[],
+    educatorId: string,
+    dueAt?: Date | null
+  ) {
     await prisma.examAssignment.createMany({
-      data: studentIds.map((studentId) => ({ quizId, studentId, educatorId })),
+      data: studentIds.map((studentId) => ({ quizId, studentId, educatorId, dueAt })),
       skipDuplicates: true,
     });
   },

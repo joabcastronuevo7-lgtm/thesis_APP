@@ -12,10 +12,19 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { toast } from "sonner";
 import type { QuestionWithChoices } from "@/types";
+import { parseJsonResponse } from "@/lib/api-response";
 
 interface QuizData {
-  attempt: { id: string };
-  quiz: { id: string; title: string; timeLimit: number | null; totalQuestions: number; passingScore: number };
+  attempt: { id: string; startedAt: string };
+  quiz: {
+    id: string;
+    title: string;
+    timeLimit: number | null;
+    timeRemainingSecs: number | null;
+    totalQuestions: number;
+    passingScore: number;
+    dueAt: string | null;
+  };
   questions: QuestionWithChoices[];
 }
 
@@ -25,7 +34,7 @@ export default function TakeExamPage() {
   const { setAttemptId, setQuestions, currentIndex, setCurrentIndex, answers, reset, isSubmitting, setIsSubmitting } = useQuizStore();
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [startTime] = useState(Date.now());
+  const [startTime, setStartTime] = useState(Date.now());
 
   useEffect(() => {
     reset();
@@ -36,10 +45,11 @@ export default function TakeExamPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ quizId: id }),
         });
-        const data = await res.json();
+        const data = await parseJsonResponse<{ success: boolean; error?: string; data: QuizData }>(res);
         if (!data.success) throw new Error(data.error);
 
         setQuizData(data.data);
+        setStartTime(new Date(data.data.attempt.startedAt).getTime());
         setAttemptId(data.data.attempt.id);
         setQuestions(data.data.questions);
       } catch (err) {
@@ -70,7 +80,7 @@ export default function TakeExamPage() {
         body: JSON.stringify({ answers: answersPayload, timeTakenSecs }),
       });
 
-      const result = await res.json();
+      const result = await parseJsonResponse<{ success: boolean; error?: string; message: string }>(res);
       if (!result.success) throw new Error(result.error);
 
       toast.success(result.message);
@@ -110,7 +120,11 @@ export default function TakeExamPage() {
           </div>
           <div className="flex items-center gap-4">
             {quiz.timeLimit && (
-              <QuizTimer timeLimitMinutes={quiz.timeLimit} onExpire={handleSubmit} />
+              <QuizTimer
+                timeLimitMinutes={quiz.timeLimit}
+                initialSeconds={quiz.timeRemainingSecs}
+                onExpire={handleSubmit}
+              />
             )}
             <Button
               onClick={handleSubmit}

@@ -97,15 +97,42 @@ export async function queryVectors(
     filter,
   });
 
-  return (result.matches ?? []).map((match) => ({
-    id: match.id,
-    content: (match.metadata?.content as string) ?? "",
-    score: match.score ?? 0,
-    topics: (match.metadata?.topics as string[]) ?? [],
-    keywords: (match.metadata?.keywords as string[]) ?? [],
-    pdfId: (match.metadata?.pdfId as string) ?? "",
-    chunkIndex: (match.metadata?.chunkIndex as number) ?? 0,
-  }));
+  const matches = result.matches ?? [];
+  const vectorIds = matches.map((match) => match.id);
+  const dbChunks = await prisma.extractedChunk.findMany({
+    where: { vectorId: { in: vectorIds } },
+    select: {
+      id: true,
+      vectorId: true,
+      content: true,
+      topics: true,
+      keywords: true,
+      pdfId: true,
+      chunkIndex: true,
+    },
+  });
+  const chunksByVectorId = new Map(
+    dbChunks
+      .filter((chunk) => chunk.vectorId)
+      .map((chunk) => [chunk.vectorId as string, chunk])
+  );
+
+  return matches
+    .map((match) => {
+      const dbChunk = chunksByVectorId.get(match.id);
+      if (!dbChunk) return null;
+
+      return {
+        id: dbChunk.id,
+        content: dbChunk.content || ((match.metadata?.content as string) ?? ""),
+        score: match.score ?? 0,
+        topics: dbChunk.topics,
+        keywords: dbChunk.keywords,
+        pdfId: dbChunk.pdfId,
+        chunkIndex: dbChunk.chunkIndex,
+      };
+    })
+    .filter((chunk): chunk is RetrievedChunk => chunk !== null);
 }
 
 // ============================================================

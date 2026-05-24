@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { registerSchema, type RegisterInput } from "@/lib/validations";
+import { z } from "zod";
+import { registerSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { parseJsonResponse } from "@/lib/api-response";
+
+type RegisterFormInput = z.input<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
@@ -19,12 +23,12 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<"EDUCATOR" | "STUDENT">("STUDENT");
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterInput>({
+  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: { role: "STUDENT" },
   });
 
-  async function onSubmit(data: RegisterInput) {
+  async function onSubmit(data: RegisterFormInput) {
     setLoading(true);
     try {
       const response = await fetch("/api/auth/register", {
@@ -33,7 +37,7 @@ export function RegisterForm() {
         body: JSON.stringify({ ...data, role }),
       });
 
-      const result = await response.json();
+      const result = await parseJsonResponse<{ success: boolean; error?: string }>(response);
       if (!result.success) throw new Error(result.error);
 
       toast.success("Account created! Please sign in.");

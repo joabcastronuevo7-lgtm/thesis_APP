@@ -14,6 +14,20 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    const existing = await prisma.question.findUnique({
+      where: { id },
+      include: { quiz: { select: { educatorId: true, status: true } } },
+    });
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Question not found" }, { status: 404 });
+    }
+    if (existing.quiz.status !== "DRAFT") {
+      return NextResponse.json({ success: false, error: "Only draft quiz questions can be edited" }, { status: 400 });
+    }
+    if (session.user.role === "EDUCATOR" && existing.quiz.educatorId !== session.user.id) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+    }
+
     const body = await request.json();
     const parsed = questionUpdateSchema.safeParse(body);
 
@@ -67,6 +81,20 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const existing = await prisma.question.findUnique({
+      where: { id },
+      include: { quiz: { select: { educatorId: true, status: true } } },
+    });
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Question not found" }, { status: 404 });
+    }
+    if (existing.quiz.status !== "DRAFT") {
+      return NextResponse.json({ success: false, error: "Only draft quiz questions can be deleted" }, { status: 400 });
+    }
+    if (session.user.role === "EDUCATOR" && existing.quiz.educatorId !== session.user.id) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+    }
+
     await prisma.question.delete({ where: { id } });
 
     return NextResponse.json({ success: true, message: "Question deleted" });

@@ -37,10 +37,10 @@ export default async function EducatorDashboard() {
       <div className="p-6 space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard title="PDFs Uploaded" value={pdfs} icon={FileText} description="Learning materials" />
-          <StatsCard title="Total Quizzes" value={quizzes.length} icon={BookOpen} description="Created quizzes" />
-          <StatsCard title="Published" value={publishedQuizzes} icon={CheckCircle} description="Live exams" />
-          <StatsCard title="Total Attempts" value={attempts} icon={Users} description="Student submissions" />
+          <StatsCard title="PDFs Uploaded" value={pdfs} icon={FileText} description="Learning materials" color="blue" />
+          <StatsCard title="Total Quizzes" value={quizzes.length} icon={BookOpen} description="Created quizzes" color="purple" />
+          <StatsCard title="Published" value={publishedQuizzes} icon={CheckCircle} description="Live exams" color="green" />
+          <StatsCard title="Total Attempts" value={attempts} icon={Users} description="Student submissions" color="orange" />
         </div>
 
         {/* Quick actions */}

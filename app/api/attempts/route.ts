@@ -31,19 +31,69 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Quiz not found or not published" }, { status: 404 });
     }
 
+    const assignment = await prisma.examAssignment.findUnique({
+      where: { quizId_studentId: { quizId, studentId: session.user.id } },
+    });
+
+    if (!assignment) {
+      return NextResponse.json(
+        { success: false, error: "This exam has not been assigned to you" },
+        { status: 403 }
+      );
+    }
+
+    if (assignment.dueAt && assignment.dueAt <= new Date()) {
+      return NextResponse.json(
+        { success: false, error: "This exam assignment is already closed" },
+        { status: 400 }
+      );
+    }
+
+    const inProgressAttempt = await prisma.studentAttempt.findFirst({
+      where: { quizId, studentId: session.user.id, status: "IN_PROGRESS" },
+      orderBy: { startedAt: "desc" },
+    });
+
+    const timeLimitSecs = quiz.timeLimit ? quiz.timeLimit * 60 : null;
+    if (inProgressAttempt && timeLimitSecs !== null) {
+      const elapsedSecs = Math.floor(
+        (Date.now() - inProgressAttempt.startedAt.getTime()) / 1000
+      );
+
+      if (elapsedSecs >= timeLimitSecs) {
+        await prisma.studentAttempt.update({
+          where: { id: inProgressAttempt.id },
+          data: {
+            status: "EXPIRED",
+            submittedAt: new Date(),
+            timeTakenSecs: elapsedSecs,
+            feedback: "The time limit expired before this exam was submitted.",
+          },
+        });
+      }
+    }
+
     // Check attempt limit
     const existingAttempts = await prisma.studentAttempt.count({
       where: { quizId, studentId: session.user.id },
     });
 
+    const reusableAttempt =
+      inProgressAttempt && (!timeLimitSecs ||
+        Math.floor((Date.now() - inProgressAttempt.startedAt.getTime()) / 1000) < timeLimitSecs)
+        ? inProgressAttempt
+        : null;
+
     if (existingAttempts >= quiz.maxAttempts) {
-      return NextResponse.json(
-        { success: false, error: `Maximum attempts (${quiz.maxAttempts}) reached` },
-        { status: 400 }
-      );
+      if (!reusableAttempt) {
+        return NextResponse.json(
+          { success: false, error: `Maximum attempts (${quiz.maxAttempts}) reached` },
+          { status: 400 }
+        );
+      }
     }
 
-    const attempt = await prisma.studentAttempt.create({
+    const attempt = reusableAttempt ?? await prisma.studentAttempt.create({
       data: {
         quizId,
         studentId: session.user.id,
@@ -51,6 +101,11 @@ export async function POST(request: Request) {
         status: "IN_PROGRESS",
       },
     });
+
+    const elapsedSecs = Math.floor((Date.now() - attempt.startedAt.getTime()) / 1000);
+    const timeRemainingSecs = timeLimitSecs === null
+      ? null
+      : Math.max(timeLimitSecs - elapsedSecs, 0);
 
     // Shuffle questions if needed
     let questions = quiz.questions;
@@ -86,6 +141,8 @@ export async function POST(request: Request) {
           timeLimit: quiz.timeLimit,
           totalQuestions: quiz.totalQuestions,
           passingScore: quiz.passingScore,
+          dueAt: assignment.dueAt,
+          timeRemainingSecs,
         },
         questions: sanitizedQuestions,
       },

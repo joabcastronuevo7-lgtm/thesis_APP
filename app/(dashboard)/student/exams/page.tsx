@@ -6,9 +6,32 @@ import { Header } from "@/components/dashboard/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Clock, BookOpen } from "lucide-react";
+import { ClipboardList, Clock, BookOpen, LayoutDashboard, MousePointerClick, Send, Trophy } from "lucide-react";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
+
+const accessSteps = [
+  {
+    icon: LayoutDashboard,
+    title: "Open My Exams",
+    description: "Assigned exams from your teacher appear here automatically.",
+  },
+  {
+    icon: MousePointerClick,
+    title: "Choose an exam",
+    description: "Check the question count, time limit, passing score, and teacher.",
+  },
+  {
+    icon: Send,
+    title: "Start or continue",
+    description: "Use Take Exam or Continue to begin your self-paced attempt.",
+  },
+  {
+    icon: Trophy,
+    title: "Submit and review",
+    description: "Submit your answers, then open Results once grading is complete.",
+  },
+];
 
 export default async function StudentExamsPage() {
   const session = await auth();
@@ -27,7 +50,45 @@ export default async function StudentExamsPage() {
   return (
     <div>
       <Header title="My Exams" description="View and take your assigned exams" />
-      <div className="p-6">
+      <div className="p-6 space-y-6">
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="border-b bg-muted/40 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="font-semibold">How to Access an Assigned Exam</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Exams are opened from your student account after your teacher assigns them.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+              {accessSteps.map((step, index) => {
+                const Icon = step.icon;
+
+                return (
+                  <div key={step.title} className="rounded-md border bg-background p-4">
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                        {index + 1}
+                      </span>
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">{step.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {step.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         {assignments.length === 0 ? (
           <div className="rounded-lg border border-dashed p-16 text-center">
             <ClipboardList className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -36,10 +97,11 @@ export default async function StudentExamsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {assignments.map(({ quiz, assignedAt }) => {
+            {assignments.map(({ quiz, assignedAt, dueAt }) => {
               const attempt = attemptMap.get(quiz.id);
               const isCompleted = attempt?.status === "GRADED";
               const isInProgress = attempt?.status === "IN_PROGRESS";
+              const isClosed = !!dueAt && dueAt <= new Date();
 
               return (
                 <Card key={quiz.id} className="hover:shadow-md transition-shadow">
@@ -59,6 +121,7 @@ export default async function StudentExamsPage() {
                             </span>
                           )}
                           <span>Assigned {formatDate(assignedAt)}</span>
+                          {dueAt && <span>Closes {formatDateTime(dueAt)}</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           By {quiz.educator.name} · Pass: {quiz.passingScore}%
@@ -71,7 +134,10 @@ export default async function StudentExamsPage() {
                         {isInProgress && (
                           <Badge variant="warning">In Progress</Badge>
                         )}
-                        {!isCompleted && (
+                        {isClosed && !isCompleted && (
+                          <Badge variant="secondary">Closed</Badge>
+                        )}
+                        {!isCompleted && !isClosed && (
                           <Button asChild size="sm">
                             <Link href={`/student/exams/${quiz.id}`}>
                               {isInProgress ? "Continue" : "Take Exam"}

@@ -33,6 +33,24 @@ export async function scoreAttempt(
   if (attempt.studentId !== studentId) throw new Error("Unauthorized");
   if (attempt.status !== "IN_PROGRESS") throw new Error("Attempt already submitted");
 
+  if (attempt.quiz.timeLimit) {
+    const elapsedSecs = Math.floor((Date.now() - attempt.startedAt.getTime()) / 1000);
+    const allowedSecs = attempt.quiz.timeLimit * 60;
+
+    if (elapsedSecs > allowedSecs + 15) {
+      await prisma.studentAttempt.update({
+        where: { id: attemptId },
+        data: {
+          status: "EXPIRED",
+          submittedAt: new Date(),
+          timeTakenSecs: elapsedSecs,
+          feedback: "The time limit expired before this exam was submitted.",
+        },
+      });
+      throw new Error("Time limit expired. This attempt has been closed.");
+    }
+  }
+
   const questionMap = new Map(
     attempt.quiz.questions.map((q) => [q.id, q])
   );
@@ -107,7 +125,10 @@ export async function scoreAttempt(
 
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const passed = percentage >= attempt.quiz.passingScore;
-  const timeTakenSecs = submission.timeTakenSecs;
+  const elapsedSecs = Math.floor((Date.now() - attempt.startedAt.getTime()) / 1000);
+  const timeTakenSecs = attempt.quiz.timeLimit
+    ? Math.min(submission.timeTakenSecs ?? elapsedSecs, attempt.quiz.timeLimit * 60)
+    : submission.timeTakenSecs;
 
   // Persist answers and update attempt
   await prisma.$transaction([

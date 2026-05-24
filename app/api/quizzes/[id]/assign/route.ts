@@ -4,7 +4,8 @@ import { quizRepository } from "@/repositories/quiz.repository";
 import { z } from "zod";
 
 const assignSchema = z.object({
-  studentIds: z.array(z.string().cuid()).min(1),
+  studentIds: z.array(z.string().min(1)).min(1),
+  dueAt: z.string().datetime().optional().nullable(),
 });
 
 export async function POST(
@@ -47,7 +48,20 @@ export async function POST(
       );
     }
 
-    await quizRepository.assignToStudents(id, parsed.data.studentIds, session.user.id);
+    const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
+    if (dueAt && dueAt <= new Date()) {
+      return NextResponse.json(
+        { success: false, error: "Due date must be in the future" },
+        { status: 400 }
+      );
+    }
+
+    await quizRepository.assignToStudents(
+      id,
+      parsed.data.studentIds,
+      session.user.id,
+      dueAt
+    );
 
     return NextResponse.json({
       success: true,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { parseJsonResponse } from "@/lib/api-response";
 
 interface PublishQuizButtonProps {
   quizId: string;
@@ -21,7 +22,7 @@ export function PublishQuizButton({ quizId }: PublishQuizButtonProps) {
       const response = await fetch(`/api/quizzes/${quizId}/publish`, {
         method: "POST",
       });
-      const result = await response.json();
+      const result = await parseJsonResponse<{ success: boolean; error?: string; message?: string }>(response);
 
       if (!result.success) {
         throw new Error(result.error ?? "Publish failed");

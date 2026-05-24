@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { cn, formatFileSize } from "@/lib/utils";
 import { toast } from "sonner";
+import { parseJsonResponse } from "@/lib/api-response";
 
 interface PdfUploadProps {
   onSuccess?: () => void;
@@ -33,6 +34,7 @@ export function PdfUpload({ onSuccess }: PdfUploadProps) {
     accept: { "application/pdf": [".pdf"] },
     maxFiles: 1,
     maxSize: 50 * 1024 * 1024,
+    useFsAccessApi: false,
     onDropRejected: () => toast.error("Invalid file. Only PDFs up to 50MB allowed."),
   });
 
@@ -54,7 +56,7 @@ export function PdfUpload({ onSuccess }: PdfUploadProps) {
       });
 
       setProgress(80);
-      const data = await response.json();
+      const data = await parseJsonResponse<{ success: boolean; error?: string }>(response);
 
       if (!data.success) throw new Error(data.error);
 

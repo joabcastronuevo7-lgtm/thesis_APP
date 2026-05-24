@@ -8,17 +8,18 @@ import { cn } from "@/lib/utils";
 
 interface QuizTimerProps {
   timeLimitMinutes: number;
+  initialSeconds?: number | null;
   onExpire: () => void;
 }
 
-export function QuizTimer({ timeLimitMinutes, onExpire }: QuizTimerProps) {
+export function QuizTimer({ timeLimitMinutes, initialSeconds, onExpire }: QuizTimerProps) {
   const { timeRemaining, setTimeRemaining } = useQuizStore();
 
   useEffect(() => {
     if (timeRemaining === null) {
-      setTimeRemaining(timeLimitMinutes * 60);
+      setTimeRemaining(initialSeconds ?? timeLimitMinutes * 60);
     }
-  }, [timeLimitMinutes, timeRemaining, setTimeRemaining]);
+  }, [initialSeconds, timeLimitMinutes, timeRemaining, setTimeRemaining]);
 
   useEffect(() => {
     const interval = setInterval(() => {

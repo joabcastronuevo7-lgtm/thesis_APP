@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -12,6 +13,7 @@ async function main() {
     where: { email: "admin@examgen.com" },
     update: {},
     create: {
+      id: randomUUID(),
       name: "System Admin",
       email: "admin@examgen.com",
       password: adminPassword,
@@ -25,6 +27,7 @@ async function main() {
     where: { email: "educator@examgen.com" },
     update: {},
     create: {
+      id: randomUUID(),
       name: "Dr. Maria Santos",
       email: "educator@examgen.com",
       password: educatorPassword,
@@ -38,6 +41,7 @@ async function main() {
     where: { email: "student1@examgen.com" },
     update: {},
     create: {
+      id: randomUUID(),
       name: "Juan dela Cruz",
       email: "student1@examgen.com",
       password: studentPassword,
@@ -49,6 +53,7 @@ async function main() {
     where: { email: "student2@examgen.com" },
     update: {},
     create: {
+      id: randomUUID(),
       name: "Ana Reyes",
       email: "student2@examgen.com",
       password: studentPassword,

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getBrowserSupabaseClient } from "@/lib/supabase-browser";
+import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
 type Role = "ADMIN" | "EDUCATOR" | "STUDENT";
 
@@ -14,11 +15,7 @@ interface AuthUser {
   image?: string | null;
 }
 
-function sessionToUser(supabaseUser: {
-  id: string;
-  email?: string;
-  user_metadata: Record<string, unknown>;
-}): AuthUser {
+function sessionToUser(supabaseUser: User): AuthUser {
   const m = supabaseUser.user_metadata ?? {};
   return {
     id: (m.prismaId ?? supabaseUser.id) as string,
@@ -38,7 +35,7 @@ export function useAuth() {
     const supabase = getBrowserSupabaseClient();
 
     // Load initial session from the cookie set by /api/auth/login
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setUser(session?.user ? sessionToUser(session.user) : null);
       setIsLoading(false);
     });
@@ -46,7 +43,7 @@ export function useAuth() {
     // Keep state in sync when the session changes (sign-in / sign-out / refresh)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user ? sessionToUser(session.user) : null);
     });
 
